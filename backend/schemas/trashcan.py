@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -9,13 +10,15 @@ class TrashcanBase(BaseModel):
     full_threshold_cm: float
 
 class TrashcanRequest(TrashcanBase):
-    pass
+    id: str
 
 class TrashcanUpdate(TrashcanBase):
     pass
 
 class TrashcanResponse(TrashcanBase):
     id: str
+    current_distance: Optional[float] = None
+    last_updated: Optional[datetime] = None
 
     class Config:
         from_attributes = True  # Read from SQLAlchemy models

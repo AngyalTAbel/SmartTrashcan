@@ -13,14 +13,12 @@ router = APIRouter(
     tags=["trashcans"]
 )
 
-@router.post("/create", response_model=TrashcanResponse)
+@router.post("", response_model=TrashcanResponse)
 def create_trashcan(
     request: TrashcanRequest,
     db: Session = Depends(get_db)
 ):
-    trashcan_id = str(uuid.uuid4())
-
-    existing_trashcan = db.query(Trashcan).filter(Trashcan.id == trashcan_id).first()
+    existing_trashcan = db.query(Trashcan).filter(Trashcan.id == request.id).first()
     if existing_trashcan:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -28,7 +26,7 @@ def create_trashcan(
         )
     
     trashcan = Trashcan(
-        id=trashcan_id,
+        id=request.id,
         name=request.name,
         location_lat=request.location_lat,
         location_lon=request.location_lon,
@@ -78,9 +76,38 @@ def delete_trashcan(trashcan_id: str, db: Session = Depends(get_db)):
     db.commit()
     return None
 
-@router.get("/all", response_model=list[TrashcanResponse])
+@router.get("", response_model=list[TrashcanResponse])
 def get_all_trashcans(db: Session = Depends(get_db)):
-    return db.query(Trashcan).order_by(Trashcan.name.asc()).all()
+    trashcans = db.query(Trashcan).order_by(Trashcan.name.asc()).all()
+    
+    results = []
+    for t in trashcans:
+        latest_metric = (
+            db.query(TrashcanMetric)
+            .filter(TrashcanMetric.device_id == t.id)
+            .order_by(TrashcanMetric.time.desc())
+            .first()
+        )
+        
+        # Create response object manually or use from_orm if possible
+        # Since we added extra fields not in DB model, we map them
+        res = TrashcanResponse.from_orm(t)
+        if latest_metric:
+            res.current_distance = latest_metric.distance_cm
+            res.last_updated = latest_metric.time
+        results.append(res)
+        
+    return results
+
+@router.get("/{device_id}/prediction")
+def get_prediction(device_id: str, db: Session = Depends(get_db)):
+    # Mock prediction logic
+    # In a real app, this would use a linear regression or ML model
+    return {
+        "device_id": device_id,
+        "predicted_full_timestamp": (datetime.now(timezone.utc) + timedelta(hours=5)).timestamp(),
+        "message": "Predicted to be full in approximately 5 hours."
+    }
 
 @router.get("/{device_id}/history", response_model=list[TrashcanMetricResponse])
 def get_device_history(

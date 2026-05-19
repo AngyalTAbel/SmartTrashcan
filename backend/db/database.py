@@ -1,6 +1,5 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from models.trashcan import Trashcan
 
 from core.config import settings
 
@@ -30,7 +29,7 @@ def create_tables():
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
         conn.execute(
             text(
-                "SELECT create_hypertable('trashcan_metrics', 'time', if_not_exists => TRUE)"
+                "SELECT create_hypertable('trashcan_metrics', 'time', if_not_exists => TRUE, migrate_data => TRUE)"
             )
         )
         conn.commit()
@@ -47,6 +46,8 @@ def seed_initial_trashcans():
         {"id": "can-003", "name": "Square Bin 1", "location_lat": 47.4985, "location_lon": 19.0410, "max_height_cm": 200.0, "full_threshold_cm": 5.0},
         {"id": "can-004", "name": "Square Bin 2", "location_lat": 47.4986, "location_lon": 19.0412, "max_height_cm": 200.0, "full_threshold_cm": 5.0},
     ]
+
+    from models.trashcan import Trashcan
 
     db = SessionLocal()
     try:
