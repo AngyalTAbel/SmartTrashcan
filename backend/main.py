@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 from db.database import create_tables, seed_initial_trashcans
-from routers import trashcan
+import models.trashcan  # Register SQLAlchemy models before metadata.create_all()
+from routers import trashcan, route
 #from models.trashcan import Trashcan, TrashcanMetric
 
 create_tables()
@@ -26,6 +27,7 @@ app.add_middleware(
 )
 
 app.include_router(trashcan.router, prefix=settings.API_PREFIX)
+app.include_router(route.router, prefix=settings.API_PREFIX)
 
 
 if __name__ == "__main__":

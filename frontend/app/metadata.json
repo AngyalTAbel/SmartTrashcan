@@ -1,0 +1,5 @@
+{
+  "name": "Smart Waste City Dashboard",
+  "description": "A cyberpunk-themed IoT dashboard for monitoring smart waste bins across a city.",
+  "requestFramePermissions": []
+}
