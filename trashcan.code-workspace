@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "backend"
+		},
+		{
+			"path": "simulator"
+		},
+		{
+			"path": "telegraf"
+		},
+		{
+			"path": "mosquitto"
+		},
+		{
+			"path": "frontend"
+		}
+	],
+	"settings": {}
+}
