@@ -35,11 +35,14 @@ def publish_loop(
     signal.signal(signal.SIGTERM, stop)
 
     try:
+        fill_levels = [ 0.0 for _ in device_ids ]
+
         while True:
-            for device in device_ids:
-                # simple realistic distance: full=0cm, empty=max_height_cm
-                fill_fraction = max(0.0, min(1.0, random.normalvariate(0.35, 0.15)))
-                distance_cm = max_height_cm * (1.0 - fill_fraction)
+            for i, device in enumerate(device_ids):
+                increment = max(0.0, random.normalvariate(0.05, 0.02))
+                fill_levels[i] = min(1.0, fill_levels[i] + increment)
+
+                distance_cm = max_height_cm * (1.0 - fill_levels[i])
                 topic = f"trashcan/public/{device}/distance"
                 payload = f"{distance_cm:.2f}"
                 client.publish(topic, payload)
