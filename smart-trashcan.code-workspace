@@ -1,0 +1,30 @@
+{
+  "folders": [
+    {
+      "name": "Root",
+      "path": "."
+    }
+    // {
+    //   "name": "Backend",
+    //   "path": "backend",
+    //   "settings": {
+    //     "python.defaultInterpreterPath": "${workspaceFolder:Backend}/.venv/bin/python"
+    //   }
+    // },
+    // {
+    //   "name": "Simulator",
+    //   "path": "simulator",
+    //   "settings": {
+    //     "python.defaultInterpreterPath": "${workspaceFolder:Simulator}/.venv/bin/python"
+    //   }
+    // },
+    // {
+    //   "name": "Mosquitto",
+    //   "path": "mosquitto"
+    // },
+    // {
+    //   "name": "Telegraf",
+    //   "path": "telegraf"
+    // }
+  ]
+}
