@@ -43,6 +43,9 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - /app/.venv
     depends_on:
       - timescaledb
     environment:
@@ -56,6 +59,8 @@ services:
     build: ./simulator
     container_name: trashcan_simulator
     restart: unless-stopped
+    volumes:
+      - ./simulator:/app
     depends_on:
       - mosquitto
     environment:
@@ -63,7 +68,7 @@ services:
       BROKER_PORT: 1883
       DEVICE_COUNT: 4
       PUBLISH_INTERVAL: 5
-      MAX_HEIGHT_CM: 100
+      MAX_HEIGHT_CM: 180
     networks:
       - iot_network
 

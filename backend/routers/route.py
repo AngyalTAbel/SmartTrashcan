@@ -19,9 +19,17 @@ router = APIRouter(
 def get_optimized_route(db: Session = Depends(get_db)):
     # Lekérjük a DB-ből a szűrt, teli kukákat
     bins_to_empty = get_bins_to_empty(db)
+    
+    depot_info = {"lat": settings.DEPOT_LAT, "lng": settings.DEPOT_LNG}
 
     if not bins_to_empty:
-        return {"status": "empty", "message": "Nincs ürítésre váró kuka.", "route": [], "geometry": None}
+        return {
+            "status": "empty", 
+            "message": "Nincs ürítésre váró kuka.", 
+            "route": [], 
+            "geometry": None,
+            "depot": depot_info
+        }
     
     # Kiszámoljuk a sorrendet
     optimized_locations = calculate_optimal_route(bins_to_empty, settings.DEPOT_LAT, settings.DEPOT_LNG)
@@ -30,11 +38,6 @@ def get_optimized_route(db: Session = Depends(get_db)):
     route_details = get_route_geometry(optimized_locations)
     
     # Válasz összeállítása a frontendnek
-    # return {
-    #     "status": "success",
-    #     "total_points": len(optimized_locations),
-    #     "route": optimized_locations # Ez egy sorba rendezett [{lat, lng}, ...] lista
-    # }
     return {
         "status": "success",
         "summary": {
@@ -43,7 +46,8 @@ def get_optimized_route(db: Session = Depends(get_db)):
             "duration_mins": round(route_details["duration_seconds"] / 60, 1) if route_details else 0,
         },
         "markers": optimized_locations, # [{lat, lng}, ...] a térkép gombostűkhöz
-        "polyline": route_details["geometry"] if route_details else None # A titkos fegyverünk
+        "polyline": route_details["geometry"] if route_details else None, # A titkos fegyverünk
+        "depot": depot_info
     }
 
 def get_bins_to_empty(db: Session):
@@ -227,20 +231,21 @@ def get_route_geometry(ordered_locations: List[dict]):
     coord_string = ";".join([f"{loc['lng']},{loc['lat']}" for loc in ordered_locations])
     
     # 2. OSRM Route API URL
-    # overview=full: kérjük a teljes, részletes geometriát
-    # geometries=polyline: egy tömörített stringet kérünk vissza (alapértelmezett és hatékony)
-    url = f"http://router.project-osrm.org/route/v1/driving/{coord_string}?overview=full&geometries=polyline"
+    # geometries=geojson: a koordináták listáját kapjuk meg [lng, lat] formátumban
+    url = f"http://router.project-osrm.org/route/v1/driving/{coord_string}?overview=full&geometries=geojson"
     
     try:
         response = requests.get(url, timeout=10)
         response_json = response.json()
         
         if response_json.get("code") == "Ok":
-            # Az OSRM visszaadja a teljes távolságot (méter), időt (másodperc) és a geometriát
             route_data = response_json["routes"][0]
+            # Az OSRM [lng, lat] sorrendben adja a koordinátákat, a Leafletnek [lat, lng] kell!
+            geojson_coords = route_data["geometry"]["coordinates"]
+            leaflet_coords = [[coord[1], coord[0]] for coord in geojson_coords]
             
             return {
-                "geometry": route_data["geometry"], # Ez az encoded polyline string
+                "geometry": leaflet_coords,
                 "distance_meters": route_data["distance"],
                 "duration_seconds": route_data["duration"]
             }

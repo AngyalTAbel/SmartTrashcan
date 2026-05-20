@@ -45,16 +45,17 @@ export function PredictionsChart({ activeBinId = "01" }: { activeBinId?: string 
       </div>
       
       {prediction && prediction.predicted_full_timestamp ? (
-         <div className="mb-4 bg-indigo-50 text-indigo-900 p-3 rounded-xl flex items-center gap-3">
+         <div className="mb-4 bg-indigo-50 text-indigo-900 p-3 rounded-xl flex items-center gap-3 border border-indigo-100">
             <Clock className="w-5 h-5 text-indigo-600" />
             <div>
-              <p className="text-sm font-semibold">Predicted Empty (Full Threshold)</p>
-              <p className="font-bold">{new Date(prediction.predicted_full_timestamp * 1000).toLocaleString()}</p>
+              <p className="text-sm font-semibold">Predicted Full Time</p>
+              <p className="font-bold">{new Date(prediction.predicted_full_timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
          </div>
       ) : (
-         <div className="mb-4 bg-slate-50 p-3 rounded-xl flex items-center gap-3">
-            <p className="text-sm font-medium text-slate-500">{prediction?.message || "Not filling up currently."}</p>
+         <div className="mb-4 bg-slate-50 p-4 rounded-xl flex flex-col items-center justify-center gap-2 border border-slate-100 border-dashed">
+            <Clock className="w-6 h-6 text-slate-300" />
+            <p className="text-sm font-medium text-slate-500 text-center">{prediction?.message || "Select a bin to see prediction"}</p>
          </div>
       )}
 

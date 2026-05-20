@@ -9,11 +9,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Copy dependency files and create the venv via uv
+# Install dependencies into system python
 COPY pyproject.toml uv.lock .python-version ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv pip install --system paho-mqtt>=2.1.0
 
 # Copy app sources
 COPY . .
 
-CMD ["/app/.venv/bin/python", "main.py"]
+CMD ["python", "main.py"]

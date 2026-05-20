@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { cn } from "../utils";
 import axios from "axios";
-import { Trash2, Edit3 } from "lucide-react";
+import { Trash2, Edit3, RotateCcw } from "lucide-react";
 
 export function TrashcanTable({ onBinSelect, onEditBin }: { onBinSelect: (id: string) => void, onEditBin: (bin: any) => void }) {
   const [bins, setBins] = useState<any[]>([]);
@@ -33,6 +33,16 @@ export function TrashcanTable({ onBinSelect, onEditBin }: { onBinSelect: (id: st
     }
   };
 
+  const handleEmpty = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      await axios.post(`/api/trashcans/${id}/empty`);
+      fetchBins();
+    } catch (err: any) {
+      alert("Empty failed: " + err.response?.data?.detail);
+    }
+  };
+
   const handleEdit = (e: React.MouseEvent, bin: any) => {
     e.stopPropagation();
     onEditBin(bin);
@@ -59,10 +69,10 @@ export function TrashcanTable({ onBinSelect, onEditBin }: { onBinSelect: (id: st
             {bins.map((bin) => {
               const depth = bin.max_height_cm - bin.full_threshold_cm;
               let fillPercent = 0;
-              if (bin.current_distance) {
+              if (bin.current_distance !== null && bin.current_distance !== undefined) {
                  fillPercent = Math.max(0, Math.min(100, ((bin.max_height_cm - bin.current_distance) / depth) * 100));
               }
-              const isCritical = bin.current_distance && bin.current_distance <= (bin.full_threshold_cm + 10);
+              const isCritical = (bin.current_distance !== null && bin.current_distance !== undefined) && bin.current_distance <= (bin.full_threshold_cm + 10);
 
               return (
               <tr key={bin.id} onClick={() => onBinSelect(bin.id)} className="hover:bg-slate-50/50 transition-colors group cursor-pointer">
@@ -82,11 +92,12 @@ export function TrashcanTable({ onBinSelect, onEditBin }: { onBinSelect: (id: st
                   </div>
                 </td>
                 <td className="py-4 text-sm font-medium text-slate-700">
-                  {bin.current_distance ? `${bin.current_distance.toFixed(1)} cm` : 'Offline'}
+                  {(bin.current_distance !== null && bin.current_distance !== undefined) ? `${bin.current_distance.toFixed(1)} cm` : 'Offline'}
                 </td>
                 <td className="py-4 text-sm text-slate-500">{bin.full_threshold_cm} cm</td>
                 <td className="py-4 text-right">
                   <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={(e) => handleEmpty(e, bin.id)} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors" title="Empty Bin"><RotateCcw className="w-4 h-4"/></button>
                     <button onClick={(e) => handleEdit(e, bin)} className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors" title="Edit Bin"><Edit3 className="w-4 h-4"/></button>
                     <button onClick={(e) => handleDelete(e, bin.id)} className="p-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors" title="Delete Bin"><Trash2 className="w-4 h-4"/></button>
                   </div>

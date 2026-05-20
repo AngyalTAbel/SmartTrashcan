@@ -11,8 +11,8 @@ class Settings(BaseSettings):
 
     ALLOWED_ORIGINS: str = ""
 
-    DEPOT_LAT: float = 47.497912
-    DEPOT_LNG: float = 19.040235
+    DEPOT_LAT: float = 47.472749
+    DEPOT_LNG: float = 19.059199
 
     def __init__(self, **values):
         super().__init__(**values)
