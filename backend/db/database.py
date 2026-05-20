@@ -41,10 +41,10 @@ def seed_initial_trashcans():
     """
 
     bins = [
-        {"id": "can-001", "name": "Park Bin 1", "location_lat": 47.4979, "location_lon": 19.0402, "max_height_cm": 180.0, "full_threshold_cm": 5.0},
-        {"id": "can-002", "name": "Park Bin 2", "location_lat": 47.4980, "location_lon": 19.0405, "max_height_cm": 120.0, "full_threshold_cm": 4.0},
-        {"id": "can-003", "name": "Square Bin 1", "location_lat": 47.4985, "location_lon": 19.0410, "max_height_cm": 200.0, "full_threshold_cm": 5.0},
-        {"id": "can-004", "name": "Square Bin 2", "location_lat": 47.4986, "location_lon": 19.0412, "max_height_cm": 200.0, "full_threshold_cm": 5.0},
+        {"id": "can-001", "name": "Hősök tere Bin", "location_lat": 47.5148, "location_lon": 19.0777, "max_height_cm": 180.0, "full_threshold_cm": 10.0},
+        {"id": "can-002", "name": "Deák Ferenc tér Bin", "location_lat": 47.4975, "location_lon": 19.0541, "max_height_cm": 180.0, "full_threshold_cm": 10.0},
+        {"id": "can-003", "name": "Széll Kálmán tér Bin", "location_lat": 47.5068, "location_lon": 19.0247, "max_height_cm": 180.0, "full_threshold_cm": 10.0},
+        {"id": "can-004", "name": "Gellért-hegy Bin", "location_lat": 47.4870, "location_lon": 19.0435, "max_height_cm": 180.0, "full_threshold_cm": 10.0},
     ]
 
     from models.trashcan import Trashcan

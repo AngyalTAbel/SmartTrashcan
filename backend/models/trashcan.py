@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, J
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
+from typing import Optional
 
 from db.database import Base
 
@@ -28,5 +29,6 @@ class TrashcanMetric(Base):
     time: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     device_id: Mapped[str] = mapped_column(ForeignKey("trashcans.id"), primary_key=True)
     distance_cm: Mapped[float] = mapped_column(Float)
+    topic: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     trashcan: Mapped["Trashcan"] = relationship("Trashcan", back_populates="metrics")

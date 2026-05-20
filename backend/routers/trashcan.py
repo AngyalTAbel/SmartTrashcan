@@ -101,12 +101,94 @@ def get_all_trashcans(db: Session = Depends(get_db)):
 
 @router.get("/{device_id}/prediction")
 def get_prediction(device_id: str, db: Session = Depends(get_db)):
-    # Mock prediction logic
-    # In a real app, this would use a linear regression or ML model
+    trashcan = db.query(Trashcan).filter(Trashcan.id == device_id).first()
+    if not trashcan:
+        raise HTTPException(status_code=404, detail="Trashcan not found")
+
+    # Megkeressük a legutolsó MANUÁLIS ürítést (amit a gombbal végeztek)
+    # A manuális ürítésnek nincs 'topic'-ja az adatbázisban.
+    last_manual_empty = (
+        db.query(TrashcanMetric)
+        .filter(
+            TrashcanMetric.device_id == device_id,
+            TrashcanMetric.topic == None
+        )
+        .order_by(TrashcanMetric.time.desc())
+        .first()
+    )
+
+    if last_manual_empty:
+        start_time = last_manual_empty.time
+    else:
+        # Ha nincs manuális, keresünk egy 90% feletti üres pontot fallback-nek
+        last_auto_empty = (
+            db.query(TrashcanMetric)
+            .filter(
+                TrashcanMetric.device_id == device_id,
+                TrashcanMetric.distance_cm >= trashcan.max_height_cm * 0.9
+            )
+            .order_by(TrashcanMetric.time.desc())
+            .first()
+        )
+        start_time = last_auto_empty.time if last_auto_empty else (datetime.now(timezone.utc) - timedelta(hours=3))
+
+    # Csak az utolsó ürítés óta eltelt adatokat nézzük
+    metrics = (
+        db.query(TrashcanMetric)
+        .filter(TrashcanMetric.device_id == device_id, TrashcanMetric.time >= start_time)
+        .order_by(TrashcanMetric.time.asc())
+        .all()
+    )
+
+    if len(metrics) < 5:
+        return {
+            "device_id": device_id,
+            "predicted_full_timestamp": None,
+            "message": "Collecting initial data for trend analysis (need 5 points)..."
+        }
+
+    # Ellenőrizzük, hogy elegendő idő telt-e el a pontok között (min. 30 másodperc)
+    time_span = (metrics[-1].time - metrics[0].time).total_seconds()
+    if time_span < 30:
+        return {
+            "device_id": device_id,
+            "predicted_full_timestamp": None,
+            "message": "Waiting for more data to establish a stable trend..."
+        }
+
+    # Egyszerű lineáris regresszió...
+    x = [m.time.timestamp() for m in metrics]
+    y = [m.distance_cm for m in metrics]
+    n = len(x)
+    sum_x = sum(x)
+    sum_y = sum(y)
+    sum_xy = sum(xi * yi for xi, yi in zip(x, y))
+    sum_xx = sum(xi * xi for xi in x)
+
+    denominator = (n * sum_xx - sum_x**2)
+    if denominator == 0:
+        return {"device_id": device_id, "predicted_full_timestamp": None, "message": "Stable level detected."}
+
+    slope = (n * sum_xy - sum_x * sum_y) / denominator
+    intercept = (sum_y - slope * sum_x) / n
+
+    if slope >= 0:
+        return {"device_id": device_id, "predicted_full_timestamp": None, "message": "Bin level is not rising."}
+
+    target_time = (trashcan.full_threshold_cm - intercept) / slope
+    current_time = datetime.now(timezone.utc).timestamp()
+    
+    if target_time < current_time:
+        return {
+            "device_id": device_id, 
+            "predicted_full_timestamp": current_time + 300, 
+            "message": "Should be full any moment now!"
+        }
+
     return {
         "device_id": device_id,
-        "predicted_full_timestamp": (datetime.now(timezone.utc) + timedelta(hours=5)).timestamp(),
-        "message": "Predicted to be full in approximately 5 hours."
+        "predicted_full_timestamp": target_time,
+        "message": f"Predicted to be full at {datetime.fromtimestamp(target_time, tz=timezone.utc).strftime('%H:%M')} UTC."
     }
 
 @router.get("/{device_id}/history", response_model=list[TrashcanMetricResponse])
@@ -122,12 +204,37 @@ def get_device_history(
             detail="Trashcan not found"
         )
     
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    # Megkeressük a legutolsó MANUÁLIS ürítést gombbal
+    last_manual_empty = (
+        db.query(TrashcanMetric)
+        .filter(
+            TrashcanMetric.device_id == device_id,
+            TrashcanMetric.topic == None
+        )
+        .order_by(TrashcanMetric.time.desc())
+        .first()
+    )
+
+    if last_manual_empty:
+        cutoff = last_manual_empty.time
+    else:
+        # Fallback az auto ürítésre
+        last_auto_empty = (
+            db.query(TrashcanMetric)
+            .filter(
+                TrashcanMetric.device_id == device_id,
+                TrashcanMetric.distance_cm >= trashcan.max_height_cm * 0.9
+            )
+            .order_by(TrashcanMetric.time.desc())
+            .first()
+        )
+        cutoff = last_auto_empty.time if last_auto_empty else (datetime.now(timezone.utc) - timedelta(hours=hours))
+    
     metrics = (
         db.query(TrashcanMetric)
         .filter(
             TrashcanMetric.device_id == device_id,
-            TrashcanMetric.time > cutoff,
+            TrashcanMetric.time >= cutoff,
         )
         .order_by(TrashcanMetric.time.asc())
         .all()
@@ -142,9 +249,48 @@ def get_device_history(
                 0.0,
                 min(
                     100.0,
-                    ((trashcan.max_height_cm - metric.distance_cm) / trashcan.max_height_cm) * 100.0,
+                    ((trashcan.max_height_cm - metric.distance_cm) / (trashcan.max_height_cm - trashcan.full_threshold_cm)) * 100.0,
                 ),
             ),
         }
         for metric in metrics
     ]
+
+@router.post("/{device_id}/empty", status_code=status.HTTP_201_CREATED)
+def empty_trashcan(device_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    trashcan = db.query(Trashcan).filter(Trashcan.id == device_id).first()
+    if trashcan is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trashcan not found"
+        )
+    
+    # Töröljük az utolsó 10 másodperc méréseit, hogy elkerüljük a "stale" adatokat
+    # amik még a szimulátor resetelése előtt érkeztek/érkezhettek
+    now = datetime.now(timezone.utc)
+    db.query(TrashcanMetric).filter(
+        TrashcanMetric.device_id == device_id,
+        TrashcanMetric.time >= now - timedelta(seconds=10)
+    ).delete()
+
+    # Új mérés hozzáadása, ami azt jelzi, hogy a kuka üres (távolság = max magasság)
+    new_metric = TrashcanMetric(
+        time=now,
+        device_id=device_id,
+        distance_cm=trashcan.max_height_cm
+    )
+    
+    db.add(new_metric)
+    db.commit()
+
+    # MQTT üzenet küldése a szimulátornak, hogy nullázza a belső állapotát
+    def notify_simulator():
+        import paho.mqtt.publish as publish
+        try:
+            publish.single(f"trashcan/public/{device_id}/empty", payload="reset", hostname="mosquitto")
+        except Exception as e:
+            print(f"Failed to notify simulator: {e}")
+
+    background_tasks.add_task(notify_simulator)
+
+    return {"message": f"Trashcan {device_id} emptied successfully"}
