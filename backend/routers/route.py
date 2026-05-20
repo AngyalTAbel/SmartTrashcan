@@ -18,16 +18,32 @@ router = APIRouter(
 @router.get("/optimize")
 def get_optimized_route(db: Session = Depends(get_db)):
     # Lekérjük a DB-ből a szűrt, teli kukákat
-    bins_to_empty = get_bins_to_empty(db) 
+    bins_to_empty = get_bins_to_empty(db)
+
+    if not bins_to_empty:
+        return {"status": "empty", "message": "Nincs ürítésre váró kuka.", "route": [], "geometry": None}
     
     # Kiszámoljuk a sorrendet
     optimized_locations = calculate_optimal_route(bins_to_empty, settings.DEPOT_LAT, settings.DEPOT_LNG)
+
+    # Lekérjük a sorba rendezett pontok KÖZÖTTI utcákat követő geometriát
+    route_details = get_route_geometry(optimized_locations)
     
-    # Visszaküldjük a frontendnek
+    # Válasz összeállítása a frontendnek
+    # return {
+    #     "status": "success",
+    #     "total_points": len(optimized_locations),
+    #     "route": optimized_locations # Ez egy sorba rendezett [{lat, lng}, ...] lista
+    # }
     return {
         "status": "success",
-        "total_points": len(optimized_locations),
-        "route": optimized_locations # Ez egy sorba rendezett [{lat, lng}, ...] lista
+        "summary": {
+            "total_bins": len(bins_to_empty),
+            "distance_km": round(route_details["distance_meters"] / 1000, 2) if route_details else 0,
+            "duration_mins": round(route_details["duration_seconds"] / 60, 1) if route_details else 0,
+        },
+        "markers": optimized_locations, # [{lat, lng}, ...] a térkép gombostűkhöz
+        "polyline": route_details["geometry"] if route_details else None # A titkos fegyverünk
     }
 
 def get_bins_to_empty(db: Session):
@@ -198,3 +214,39 @@ def calculate_optimal_route(bins_from_db, depot_lat: float, depot_lng: float):
         ordered_route.append(locations[idx])
         
     return ordered_route
+
+def get_route_geometry(ordered_locations: List[dict]):
+    """
+    Lekéri az OSRM-től a sorba rendezett pontok közötti tényleges útgeometriát.
+    ordered_locations: [{'lat': 47.1, 'lng': 19.1}, ...] már az optimális sorrendben!
+    """
+    if len(ordered_locations) < 2:
+        return {"geometry": None, "distance_meters": 0, "duration_seconds": 0}
+
+    # 1. Koordináták összefűzése (lng,lat)
+    coord_string = ";".join([f"{loc['lng']},{loc['lat']}" for loc in ordered_locations])
+    
+    # 2. OSRM Route API URL
+    # overview=full: kérjük a teljes, részletes geometriát
+    # geometries=polyline: egy tömörített stringet kérünk vissza (alapértelmezett és hatékony)
+    url = f"http://router.project-osrm.org/route/v1/driving/{coord_string}?overview=full&geometries=polyline"
+    
+    try:
+        response = requests.get(url, timeout=10)
+        response_json = response.json()
+        
+        if response_json.get("code") == "Ok":
+            # Az OSRM visszaadja a teljes távolságot (méter), időt (másodperc) és a geometriát
+            route_data = response_json["routes"][0]
+            
+            return {
+                "geometry": route_data["geometry"], # Ez az encoded polyline string
+                "distance_meters": route_data["distance"],
+                "duration_seconds": route_data["duration"]
+            }
+        else:
+            raise Exception(f"OSRM Route hiba: {response_json.get('code')}")
+            
+    except Exception as e:
+        print(f"Nem sikerült lekérni az útgeometriát: {e}")
+        return {"geometry": None, "distance_meters": 0, "duration_seconds": 0}
