@@ -8,6 +8,7 @@ from typing import List
 from core.config import settings
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
+import requests
 
 router = APIRouter(
     prefix="/routes",
@@ -55,8 +56,49 @@ def get_bins_to_empty(db: Session):
     
     return bins_to_collect
 
-# --- 1. LÉPÉS: LÉGVONALBELI TÁVOLSÁG MÁTRIX KÉSZÍTÉSE ---
+# --- 1. LÉPÉS: LÉGVONALBELI TÁVOLSÁG (IDŐBEN) MÁTRIX KÉSZÍTÉSE ---
 def create_distance_matrix(locations: List[dict]):
+    """
+    Lekéri a valós úthálózaton mért utazási idő mátrixot az OSRM API-n keresztül.
+    locations: [{'lat': 47.1, 'lng': 19.1}, ...]
+    Visszatérési érték: Egy N x N-es mátrix, ahol az értékek másodpercben vannak megadva.
+    """
+    if not locations:
+        return []
+
+    # 1. Koordináták összefűzése OSRM formátumba: "lng,lat;lng,lat;lng,lat"
+    # FIGYELEM: Az OSRM-nek a 'lng' kell előre!
+    coord_string = ";".join([f"{loc['lng']},{loc['lat']}" for loc in locations])
+    
+    # 2. OSRM Table API URL összeállítása (driving = autós útvonal)
+    url = f"http://router.project-osrm.org/table/v1/driving/{coord_string}?annotations=duration"
+    
+    try:
+        # Lekérjük az adatokat az API-tól
+        response = requests.get(url, timeout=10)
+        response_json = response.json()
+        
+        if response_json.get("code") == "Ok":
+            # A durations egy N x N-es mátrix másodpercben (float)
+            # Az OR-Tools-nak egészek (int) kellenek, ezért kerekítünk
+            raw_matrix = response_json["durations"]
+            
+            integer_matrix = []
+            for row in raw_matrix:
+                # Ha az OSRM valamiért None-t adna vissza (pl. elérhetetlen pont), nullázzuk
+                integer_matrix.append([int(cell) if cell is not None else 0 for cell in row])
+                
+            return integer_matrix
+        else:
+            raise Exception(f"OSRM API hiba: {response_json.get('code')}")
+            
+    except Exception as e:
+        print(f"Nem sikerült elérni az OSRM-et ({e}), biztonsági mentésként légvonalat használunk...")
+        # Ide beteheted a régi légvonalbeli függvényedet fallback-nek, ha az API lehalna
+        return create_fallback_air_distance_matrix(locations)
+
+# Fallback légvonalbeli mérésre, ha az úthálózaton mért nem működik
+def create_fallback_air_distance_matrix(locations: List[dict]):
     """
     Kiszámolja a pontok közötti légvonalbeli távolságot.
     locations: [{'lat': 47.1, 'lng': 19.1}, ...]
